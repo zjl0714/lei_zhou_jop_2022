@@ -59,40 +59,91 @@ use subway_analysis_use.dta, clear
 	
 *** Figure 2: Dynamic Effects of Subway Approvals on Mayor Promotion ***
 
-	capture drop mpprior? mppost? mpconn?
-	g mpprior1=(Mayor_plan==0 & F.Mayor_plan==1)
-	g mpprior2=(Mayor_plan==0 & F.Mayor_plan==0 & F2.Mayor_plan==1)
-	g mpprior3=(Mayor_plan==0 & F.Mayor_plan==0 & F2.Mayor_plan==0 & F3.Mayor_plan==1)
-	g mpprior4=(Mayor_plan==0 & F.Mayor_plan==0 & F2.Mayor_plan==0 & F3.Mayor_plan==0 & F4.Mayor_plan==1)
-	g mpprior5=(Mayor_plan==0 & F.Mayor_plan==0 & F2.Mayor_plan==0 & F3.Mayor_plan==0 & F4.Mayor_plan==0 & F5.Mayor_plan==0)
+	capture drop mpprior*
+	capture drop mpconn*
+	capture drop mppost*
+	capture drop temp_ind*
 
-
-	g mppost1=(Mayor_plan==0 & L.Mayor_plan==1) 
-	g mppost2=(Mayor_plan==0 & L.Mayor_plan==0 & L2.Mayor_plan==1)
-	g mppost3=(Mayor_plan==0 & L.Mayor_plan==0 & L2.Mayor_plan==0 & L3.Mayor_plan==1)
-	g mppost4=(Mayor_plan==0 & L.Mayor_plan==0 & L2.Mayor_plan==0 & L3.Mayor_plan==0 & L4.Mayor_plan==0)
+	*** generate treatment years
+	* generate mpconn0
+	gen mpconn0 = (L.Mayor_plan == 0 & Mayor_plan == 1)
+	replace mpconn0 = 1 if L.Mayor_plan == 1 & Mayor_plan == 1 & L.Mayor_leaderindex != Mayor_leaderindex
 	
-	g mpconn1=(Mayor_plan==1 & L.Mayor_plan==0)
-	g mpconn2=(Mayor_plan==1 & L.Mayor_plan==1 & L2.Mayor_plan==0 )
-	g mpconn3=(Mayor_plan==1 & L.Mayor_plan==1 & L2.Mayor_plan==1 & L3.Mayor_plan==0)
-	g mpconn4=(Mayor_plan==1 & L.Mayor_plan==1 & L2.Mayor_plan==1 & L3.Mayor_plan==1 & L4.Mayor_plan==0 )
-	g mpconn5=(Mayor_plan==1 & mpconn1==0 & mpconn2==0 & mpconn3==0 & mpconn4==0)
-		
-
-	xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn1-mpconn5 i.Year if fsj2 == 0, fe cluster(City_Code)
+	* generate mpconn1-13
+	forvalues i=1/13{
+		gen temp_ind`i' = 1
+		forvalues x=0/`i'{
+			replace temp_ind`i' = 0 if L`x'.Mayor_plan != 1
+			replace temp_ind`i' = 0 if L`x'.Mayor_leaderindex != Mayor_leaderindex
+		}
+		gen mpconn`i' = (temp_ind`i' == 1 & L`i'.mpconn0 == 1)
+		drop temp_ind`i'
+	}
 	
+	* combine mpconn5-13 into mpconn4
+	forvalues i=5/13{
+		replace mpconn4 = 1 if mpconn`i' == 1
+	}
+	
+	*** Placebo 1: years before the city mayor received subway approval
+	* generate lead 1
+	gen mpprior1=(Mayor_plan==0 & F.Mayor_plan==1)
+
+	* generate leads 2-13
+	forvalues i=2/13 {
+		gen temp_ind`i' = 1
+		forvalues x=0/`=`i'-1' {
+			replace temp_ind`i' = 0 if F`x'.Mayor_plan == 1
+		}
+		gen mpprior`i' = (temp_ind`i' == 1 & F`i'.Mayor_plan == 1)
+		drop temp_ind`i'
+	}
+
+	* combine years 6-13 into category 5+
+	forvalues i=6/13 {
+		replace mpprior5 = 1 if mpprior`i' == 1
+	}
+
+	* tests
+	list City_Code Year mpprior5 mpprior4 mpprior3 mpprior2 mpprior1 Mayor_plan if City_Code == 1301
+	list City_Code Year mpprior5 mpprior4 mpprior3 mpprior2 mpprior1 Mayor_plan if City_Code == 1302
+	list City_Code Year mpprior5 mpprior4 mpprior3 mpprior2 mpprior1 Mayor_plan if City_Code == 4101
+
+	
+	*** Placebo 2: years after the mayor who receives the subway approval leaves office
+	* generate post1
+	gen mppost1=(Mayor_plan==0 & L.Mayor_plan==1)
+
+	* generate posts 2-13
+	forvalues i=2/13 {
+		gen temp_ind`i' = 1
+		forvalues x=0/`=`i'-1' {
+			replace temp_ind`i' = 0 if L`x'.Mayor_plan == 1
+	}
+		gen mppost`i' = (temp_ind`i' == 1 & L`i'.Mayor_plan == 1)
+		drop temp_ind`i'
+	}
+	
+	* combine years 5-13 into category 4+ 
+	forvalues i=5/13 {
+		replace mppost4 = 1 if mppost`i' == 1
+	}
+			
+	* Figure 2 updated
+	gen mppost_any = (mppost1 == 1 | mppost2 == 1 | mppost3 == 1 | mppost4 == 1)
+	xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn0 mpconn1 mpconn2 mpconn3 ///
+		mpconn4 mppost_any i.Year if fsj2 == 0, fe cluster(City_Code)
 	coefplot, keep(mpprior5 mpprior4 mpprior3 mpprior2 ///
-		mpconn1 mpconn2 mpconn3 mpconn4 mpconn5 mppost1 mppost2 mppost3 | ///
-		mppost4 mppost5) coeflabels(mpprior5 = "=<-5" mpprior4="-4" mpprior3="-3" ///
-		mpprior2="-2" mpconn1="0" mpconn2="1" ///
-		mpconn3="2" mpconn4="3" mpconn5=">=4") ///
+		mpconn0 mpconn1 mpconn2 mpconn3 mpconn4 ) coeflabels(mpprior5 = "=<-5" mpprior4="-4" ///
+		mpprior3="-3" mpprior2="-2" mpconn0="0" mpconn1="1" ///
+		mpconn2="2" mpconn3="3" mpconn4=">=4") ///
 		vertical yline(0, lp(dash)) scheme(s1mono) ///
 		ytitle("Effect of Approval on Mayoral Promotion in 3 Years") ///
 		levels(95, 90) xline(4.5, lp(dash)) ///
-		mfcolor(white) ylabel(-0.4(0.2)1.2) yscale(range(-0.4 1.0) titlegap(0.2))
-	graph export figure2.tif, replace	
-		
-	* Joint test
+		mfcolor(white) ylabel(-0.4(0.2)1.2) yscale(range(-0.4 1.2) titlegap(0.2))
+	graph export figure2.png, replace
+	
+		* Joint test
 	test mpprior5=mpprior4=mpprior3=mpprior2=0
 		
 	
@@ -233,11 +284,10 @@ use subway_analysis_use.dta, clear
 
 *** Table A14:  Test Parallel Trends Assumption *** 
 
+	* Table A14 updated
 	eststo clear
-	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn1-mpconn5 i.Year if fsj2 == 0, fe cluster(City_Code)
-	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn1-mpconn5 $mayor_cont $base_cont i.provinceyear if fsj2 == 0, fe cluster(City_Code)	
-	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn1-mpconn5 mppost1-mppost4 i.Year if fsj2 == 0, fe cluster(City_Code)
-	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn1-mpconn5 mppost1-mppost4 $mayor_cont $base_cont i.provinceyear if fsj2 == 0, fe cluster(City_Code)
-	esttab, se b(3) t(3) star(* 0.1 ** 0.05 *** 0.01) drop(*.provinceyear *.Year $mayor_cont $base_cont) replace
-	esttab using TableA14.rtf, se b(3) t(3) star(* 0.1 ** 0.05 *** 0.01) drop(*.provinceyear *.Year $mayor_cont $base_cont) replace
-	
+	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn0 mpconn1 mpconn2 mpconn3 mpconn4 mppost_any i.Year if fsj2 == 0, fe cluster(City_Code)
+	eststo: qui reghdfe Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn0 mpconn1 mpconn2 mpconn3 mpconn4 mppost_any $mayor_cont $base_cont if fsj2 == 0, absorb(Year#pro_code City_Code) vce(cluster City_Code)
+	eststo: qui xtreg Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn0 mpconn1 mpconn2 mpconn3 mpconn4 mppost1 mppost2 mppost3 mppost4 i.Year if fsj2 == 0, fe cluster(City_Code)
+	eststo: qui reghdfe Mayor_promotion3y mpprior5 mpprior4 mpprior3 mpprior2 mpconn0 mpconn1 mpconn2 mpconn3 mpconn4 mppost1 mppost2 mppost3 mppost4 $mayor_cont $base_cont if fsj2 == 0, absorb(Year#pro_code City_Code) vce(cluster City_Code)
+	esttab, se b(3) t(3) star(* 0.1 ** 0.05 *** 0.01) keep(mpprior* mpconn* mppost*) replace

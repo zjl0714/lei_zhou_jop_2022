@@ -2,7 +2,9 @@
 
 **AUTHOR: ZHENHUAN LEI AND JUNLONG AARON ZHOU**
 
-**DATE: 08/07/2020**
+**DATE: 06/28/2025**
+
+**We update the code for Figure 2 and Table A14, please refer to the erratum**
 
 
 1. 1_cross_country_analysis.do contains the replication codes to reproduce Figure 1 and Appendix Figures A1 and A2.
